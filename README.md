@@ -185,6 +185,14 @@ The [supervised model results](docs/sft-results.md) record the completed
 overnight SFT run and full validation/test navigation evaluation of its saved
 best checkpoint.
 
+For RL from that selected SFT model, use `configs/rl.toml`. The
+[RL smoke report](docs/rl-smoke-results.md) records the GPU update/reload/resume
+checks and runtime estimate; the [training guide](docs/training.md#rl-after-the-completed-sft-run)
+has launch, resume, and comparison commands. RL uses a new checkpoint run and
+preserves the untuned comparison copy and all saved checkpoints from the completed SFT run.
+The [optimized-kernel report](docs/training-kernels.md) records the faster validated
+training stack and updated runtime estimate.
+
 
 # Future Val
 Later on

@@ -54,6 +54,16 @@ def main() -> int:
     properties = torch.cuda.get_device_properties(0)
     print(f"GPU: {properties.name}; memory {properties.total_memory / (1024 ** 3):.1f} GiB")
     print(f"CUDA matrix multiply: OK ({product[0, 0].item():.0f})")
+    try:
+        from causal_conv1d import causal_conv1d_fn
+        from fla.ops.gated_delta_rule import chunk_gated_delta_rule
+
+        print(f"causal-conv1d: {importlib.metadata.version('causal-conv1d')}; {causal_conv1d_fn.__module__}")
+        print(f"flash-linear-attention: {importlib.metadata.version('flash-linear-attention')}; {chunk_gated_delta_rule.__module__}")
+    except (ImportError, OSError) as exc:
+        print(f"Optimized training kernels could not load: {exc}", file=sys.stderr)
+        print("Rerun scripts/setup_training.sh to install the pinned kernel packages.", file=sys.stderr)
+        return 1
     return 0
 
 

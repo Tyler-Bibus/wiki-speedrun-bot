@@ -1,0 +1,64 @@
+# RL from the evaluated SFT best checkpoint; existing SFT runs stay untouched.
+# 200 updates is a bounded budget; see docs/rl-smoke-results.md for measured timing.
+schema_version = 1
+seed = 42
+data_dir = "data"
+run_dir = "runs"
+
+[model]
+checkpoint = "checkpoints/20261022T025733.517853Z-sft/update-001700"
+kev_revision = "6b719c3c3f367295f6ef336f4f751cf5ff970abc"
+device = "cuda"
+weights_dtype = "fp32"
+autocast_dtype = "bf16"
+temperature = 1.0
+
+[choices]
+strategy = "tournament"
+node_max_choices = 64
+max_state_tokens = 1024
+max_row_tokens = 4096
+excerpt_chars = 1500
+grouping = "source_order"
+
+[data]
+# A reproducible sample keeps prepared files small on a personal computer.
+max_paths = 2000
+split_manifest = "data/splits/training/manifest.json"
+sft_train = "data/training/sft_train.jsonl"
+sft_dev = "data/training/sft_dev.jsonl"
+rl_train_tasks = "data/splits/training/train_tasks.json"
+dev_tasks = "data/splits/training/dev_tasks.json"
+test_tasks = "data/splits/training/test_tasks.json"
+
+[sft]
+epochs = 2
+# SFT settings are retained for a complete config; train-rl uses [rl].
+max_updates = 2000
+learning_rate = 0.00002
+microbatch_size = 1
+gradient_accumulation = 8
+
+[rl]
+max_steps = 12
+updates = 200
+task_pairs_per_update = 2
+episodes_per_pair = 2
+learning_rate = 0.000005
+gamma = 1.0
+entropy_coefficient = 0.0
+max_grad_norm = 1.0
+
+[reward]
+success = 1.0
+failure = -1.0
+step_cost = 0.02
+
+[save]
+checkpoint_every_updates = 10
+# Retain the two most recent checkpoints plus best.json's target, per run.
+keep_last_checkpoints = 2
+evaluate_every_updates = 25
+# Fixed seeded development tasks for checkpoint selection.
+# evaluate-trained still evaluates its full split unless --max-tasks is passed.
+evaluation_max_tasks = 16

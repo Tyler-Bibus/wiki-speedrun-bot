@@ -94,7 +94,8 @@ def write_provenance(run_dir: Path, model: Any, data_hashes: dict[str, str],
     torch = _torch()
     metadata = getattr(model, "metadata", {})
     package_versions = {}
-    for package in ("torch", "transformers", "peft", "numpy", "kev"):
+    for package in ("torch", "transformers", "peft", "numpy", "kev", "triton",
+                    "causal-conv1d", "flash-linear-attention", "fla-core"):
         try:
             package_versions[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:

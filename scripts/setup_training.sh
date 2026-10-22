@@ -6,7 +6,8 @@ cd "$repo_root"
 
 export HF_HOME="$repo_root/.cache/huggingface"
 export UV_CACHE_DIR="$repo_root/.cache/uv"
-mkdir -p "$HF_HOME" "$UV_CACHE_DIR"
+export TRITON_CACHE_DIR="$repo_root/.cache/triton"
+mkdir -p "$HF_HOME" "$UV_CACHE_DIR" "$TRITON_CACHE_DIR"
 
 if [[ -x .venv/bin/python ]]; then
     existing_python="$(.venv/bin/python --version 2>&1)"

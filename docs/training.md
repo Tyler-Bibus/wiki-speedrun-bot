@@ -25,6 +25,11 @@ The setup pins the Kev source revision and CUDA PyTorch in `uv.lock`. Caches
 live in `.cache/`. The first model load downloads the base weights and released
 adapter. Training happens in process; the HTTP inference server is not needed.
 
+The Linux Python 3.12 setup also installs the pinned `causal-conv1d` and
+`flash-linear-attention` kernels. Their first use compiles Triton kernels into
+`.cache/triton/`; later calls reuse that cache. The [kernel validation report](training-kernels.md)
+records compatibility, numerical checks, and measured speed improvements.
+
 ## Prepare the dataset
 
 ```bash
@@ -72,8 +77,10 @@ For an overnight SFT run, use the larger profile explicitly:
 `configs/overnight.toml` allows two epochs, capped at 2,000 optimizer updates.
 It keeps the same 2,000-path sample, batch sizes, and checkpoint retention as
 the pilot. It runs SFT only; start RL separately after reviewing development
-results. The local RTX 3090 check measured about seven seconds per update;
-budget roughly 4–6 hours including periodic evaluation, depending on GPU load.
+results. The original RTX 3090 check with reference kernels measured about seven
+seconds per update, or roughly 4–6 hours including evaluation. That historical
+SFT estimate predates the optimized kernels; see the [kernel report](training-kernels.md)
+for current RL timings.
 
 ```bash
 .venv/bin/python -m wiki_speedrun train-sft --config configs/overnight.toml
@@ -115,6 +122,47 @@ RL collects fresh sampled episodes under a fixed policy, recomputes their
 log probabilities with gradients, and takes one optimizer step. It then
 discards the batch. Dropout is off during collection and replay. This keeps
 the sampled policy and gradient calculation consistent.
+
+### RL after the completed SFT run
+
+`configs/rl.toml` initializes from the evaluated SFT checkpoint at update 1,700
+and allows 200 RL updates, with four sampled episodes per update. It saves every
+10 updates and evaluates the same 16 development tasks used for SFT selection
+every 25 updates. Start it from the repository root:
+
+```bash
+.venv/bin/python -u -m wiki_speedrun train-rl --config configs/rl.toml
+```
+
+Resume an interrupted run with its own RL checkpoint and the identical config:
+
+```bash
+.venv/bin/python -u -m wiki_speedrun train-rl --config configs/rl.toml --resume checkpoints/RL_RUN_ID/latest.json
+```
+
+The [RL smoke report](rl-smoke-results.md) records the GPU checks and runtime
+estimate with reference kernels. With the [optimized kernels](training-kernels.md),
+the 200-update budget is estimated at roughly 1–1.5 hours.
+`configs/rl-smoke.toml` is a separate three-update profile for short
+checks; start the longer profile as a new run from SFT.
+
+The untuned release is preserved at
+`checkpoints/comparison-untuned-kev-0.8b-bf75a6a/`, as independent copies of the
+exact released adapter, head, and tokenizer. Its `comparison-manifest.json`
+records their hashes and the frozen Qwen base revision in the shared cache.
+All three saved SFT checkpoints remain in
+`checkpoints/20261022T025733.517853Z-sft/`: updates 1,700 (best), 1,950, and 2,000
+(latest). RL writes a new run directory; its retention never prunes those SFT
+checkpoints or the untuned copy. Keep these local artifacts and the shared base
+model cache for later comparisons; they are ignored by Git.
+
+Use identical settings and development pairs to compare them:
+
+```bash
+.venv/bin/python -m wiki_speedrun evaluate-trained --config configs/rl.toml --checkpoint checkpoints/comparison-untuned-kev-0.8b-bf75a6a --split dev
+.venv/bin/python -m wiki_speedrun evaluate-trained --config configs/rl.toml --checkpoint checkpoints/20261022T025733.517853Z-sft/update-001700 --split dev
+.venv/bin/python -m wiki_speedrun evaluate-trained --config configs/rl.toml --checkpoint checkpoints/RL_RUN_ID/best.json --split dev
+```
 
 ## Checkpoints, recovery, and evaluation
 

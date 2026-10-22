@@ -74,6 +74,7 @@ class TrainableKev:
         """Build Kev in fp32 and warm-start all adapter and pointer-head weights."""
         repository_root = Path(__file__).resolve().parents[3]
         os.environ.setdefault("HF_HOME", str(repository_root / ".cache" / "huggingface"))
+        os.environ.setdefault("TRITON_CACHE_DIR", str(repository_root / ".cache" / "triton"))
         import torch
         from huggingface_hub import HfApi
         from kev.checkpoint import Checkpoint, Meta
