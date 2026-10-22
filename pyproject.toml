@@ -10,6 +10,21 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = []
 
+[project.optional-dependencies]
+train = [
+    "kev",
+    "torch==2.8.0+cu128; sys_platform == 'linux'",
+]
+
+[tool.uv.sources]
+kev = { git = "https://github.com/jaredpalmer/kev.git", rev = "6b719c3c3f367295f6ef336f4f751cf5ff970abc" }
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [project.scripts]
 wiki-speedrun = "wiki_speedrun.cli:main"
 

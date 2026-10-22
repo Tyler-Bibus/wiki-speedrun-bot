@@ -1,12 +1,13 @@
 # wiki-speedrun-bot
 
-An untuned Kev-0.8B baseline for Wikispeedia: give the model a target, the current
-article, and its outgoing links, then let it choose the next click. The first goal
-is to measure whether the released model can navigate before training anything.
+Kev-0.8B navigation for Wikispeedia: give the model a target, the current article,
+and its outgoing links, then let it choose the next click. The project includes
+the original untuned baseline and optional supervised fine-tuning and RL loops.
 
-The Python application uses the standard library. Kev runs in its own local GPU
-server, using the upstream model definitions and loader. There are no custom
-model weights, supervised training loops, or RL updates yet.
+The baseline application uses the standard library and calls a local Kev GPU
+server. Training uses the optional PyTorch environment and loads Kev in process,
+continuing the released adapter and pointer head while freezing the base model.
+See [training in WSL](docs/training.md) for setup, commands, and saved formats.
 
 ## Quick start on Windows with an NVIDIA GPU
 
@@ -154,14 +155,41 @@ run: the one-click check succeeded, and untuned Kev solved 1/10 sampled longer
 tasks versus 0/10 for random navigation. The fixed pairs are saved under
 `examples/baseline_tasks.json` for repeatable comparisons.
 
-## Later training
+## Training in WSL
 
-If the baseline is weak, use supervised fine-tuning / imitation learning from
-human navigation examples, starting from released Kev weights. Split complete
-trajectories and start/target pairs before turning them into individual decisions.
-Keep development and held-out test tasks fixed for comparisons.
+Use Python 3.12 and the pinned Linux training environment:
 
-After that, add `training/sft.py`, `training/rollouts.py`, `training/rewards.py`,
-`training/rl.py`, and `models/trainable_kev.py`. RL needs in-process access to
-model gradients; the HTTP inference client cannot perform policy updates. A larger
-Kev checkpoint can be compared through the same environment and evaluation loop.
+```bash
+bash scripts/setup_training.sh
+.venv/bin/python -m wiki_speedrun prepare-training --config configs/training.toml
+.venv/bin/python -m wiki_speedrun train-sft --config configs/training.toml
+.venv/bin/python -m wiki_speedrun train-rl --config configs/training.toml --init-from checkpoints/SFT_RUN_ID/best.json
+```
+
+Replace `SFT_RUN_ID` with the SFT checkpoint location printed by the command.
+Training dependencies and model weights are prepared in `.venv` and `.cache`.
+The existing Windows scripts continue to support the original inference baseline.
+
+The [training guide](docs/training.md) covers short validation runs, resume,
+evaluation, and configuration. The reward is `+1` for success, `-1` for terminal
+failure, and `-0.02` per navigation click. Large choice sets use token-safe
+tournaments: predictions select group winners, then another prediction selects
+among the winners. Every outgoing link enters the tournament.
+
+The [implementation plan](docs/rl-plan.md) documents the interfaces, file formats,
+and Luna agent assignments. The [initial readiness review](docs/training-readiness.md)
+records the pre-implementation findings. The [training validation report](docs/training-validation.md)
+records the tests and short RTX 3090 checks; those checks establish working
+training mechanics, rather than a measured navigation improvement.
+The [supervised model results](docs/sft-results.md) record the completed
+overnight SFT run and full validation/test navigation evaluation of its saved
+best checkpoint.
+
+
+# Future Val
+Later on
+In addition, I would like to use this evaluation framework to try to use the actual Jev model as an option using my API key for openRouter [https://openrouter.ai/typesafe/jev-1.14?view=api](https://openrouter.ai/typesafe/jev-1.14?view=api) (Create a location for me to paste my key that is git ignored). I want to compare my fine tuned against it.
+
+Also I should consider comparing 0.8 fine tuned against other sized decision and maybe even LLMs using openrouter.
+
+I should also compare different fine tuning/LorA/Transfer Learning methods.
