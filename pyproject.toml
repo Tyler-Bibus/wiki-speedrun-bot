@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wiki-speedrun-bot"
+version = "0.1.0"
+description = "A small Wikispeedia baseline using Kev link decisions"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[project.scripts]
+wiki-speedrun = "wiki_speedrun.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

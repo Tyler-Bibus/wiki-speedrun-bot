@@ -1,0 +1,10 @@
+# Run commands from the repository root. Paths are relative to that directory.
+data_dir = "data"
+run_dir = "runs"
+base_url = "http://127.0.0.1:8008"
+checkpoint = "jaredpalmer/kev-0.8b@v1.0"
+max_steps = 12
+excerpt_chars = 1500
+max_options = 255
+seed = 42
+timeout = 120.0

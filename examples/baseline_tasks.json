@@ -1,0 +1,12 @@
+[
+  {"start": "Common_Hazel", "target": "Opera"},
+  {"start": "First_Transcontinental_Railroad", "target": "Tao_Te_Ching"},
+  {"start": "Wars_of_the_Roses", "target": "Invasion_of_Grenada"},
+  {"start": "Screw", "target": "Condoleezza_Rice"},
+  {"start": "George_W._Bush", "target": "Asthma"},
+  {"start": "Bushbuck", "target": "Anthropology"},
+  {"start": "Newspaper", "target": "Grand_Canyon"},
+  {"start": "Roald_Amundsen", "target": "Hudson_Bay"},
+  {"start": "Space_Race", "target": "Midway_Atoll"},
+  {"start": "Brothers_Grimm", "target": "Water"}
+]
