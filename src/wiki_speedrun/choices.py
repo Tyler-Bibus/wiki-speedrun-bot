@@ -116,10 +116,11 @@ def _predict(model: Any, request: dict[str, Any], candidate_ids: list[str],
 class TournamentPolicy:
     """Resolve every edge through deterministic groups and successive winners."""
 
-    def __init__(self, model: Any, config: Any, sample: bool = False):
+    def __init__(self, model: Any, config: Any, sample: bool = False, *, predictor=None):
         self.model = model
         self.config = config
         self.sample = sample
+        self.predictor = predictor
 
     def choose(self, env: Any) -> dict[str, Any]:
         moves = env.legal_moves()
@@ -149,7 +150,10 @@ class TournamentPolicy:
                     winners.append(group[0])
                     continue
                 request = make_request(state, group, [articles_by_id[item] for item in group])
-                winner, old_log_prob, entropy = _predict(self.model, request, group, self.sample)
+                if self.predictor is None:
+                    winner, old_log_prob, entropy = _predict(self.model, request, group, self.sample)
+                else:
+                    winner, old_log_prob, entropy = self.predictor(request, group, round_number, node_index)
                 winners.append(winner)
                 state_tokens = int(self.model.state_token_count(state))
                 token_counter = getattr(self.model, "token_counts", None)

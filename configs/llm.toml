@@ -1,0 +1,8 @@
+model = "deepseek/deepseek-v4.1-flash-1017"
+protocol = "llm_full_list_json"
+structured_output = "json_schema"
+max_completion_tokens = 2048
+reasoning_effort = "low"
+temperature = 0
+max_requests = 100000
+max_cost = 10000

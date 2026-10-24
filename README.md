@@ -201,3 +201,189 @@ In addition, I would like to use this evaluation framework to try to use the act
 Also I should consider comparing 0.8 fine tuned against other sized decision and maybe even LLMs using openrouter.
 
 I should also compare different fine tuning/LorA/Transfer Learning methods.
+
+## OpenRouter comparison
+
+The remote benchmark uses three paid OpenRouter models: Jev 1.14 for structured
+decisions, DeepSeek V4.1 Flash 1017, and MiniMax M3.1 Flash.
+It uses the existing environment and frozen Wikispeedia splits. No installation,
+training, or environment upgrade is performed by the benchmark command.
+
+Set `OPENROUTER_API_KEY` in your process environment or in the ignored
+`.env.openrouter` file. `.env.openrouter.example` shows the format. The file
+accepts comments, blank lines, and exactly one plain or quoted assignment;
+it is parsed as data. A nonempty environment key takes precedence. Other
+commands do not read these credentials.
+
+From the repository root, reproduce all requested remote systems and the three
+pinned local checkpoints, validate the saved evidence, and generate reports:
+
+```bash
+.venv/bin/python -m wiki_speedrun benchmark
+```
+
+Results, progress, and reports are in `runs/openrouter-paid-comparison/`. Run the
+same command again to resume. Completed episodes, including invalid LLM
+responses, are preserved. An interrupted episode restarts; its earlier traces
+and API charges remain recorded. Resume checks code, config, model snapshot,
+tokenizer, graph/text, and ordered tasks. Budget limits may be raised explicitly
+on an individual `evaluate --resume` command; protocol settings cannot change.
+Use a new `--output` directory when changing suite settings or source code.
+
+For a bounded five-pair development reproduction and its report:
+
+```bash
+.venv/bin/python -m wiki_speedrun benchmark --max-tasks 5 --splits dev --output runs/openrouter-five-task
+```
+
+The default lineup is `minimax deepseek jev`. Use `--models jev` to run only
+the decision model. `--no-include-local` avoids
+local GPU evaluation. Existing local artifacts are reused only after checking
+checkpoint hashes, graph/text, frozen task coverage, transitions, and every
+recorded tournament group and token count. Missing local runs are evaluated
+without optimizer updates. The local checkpoints are fixed in
+`src/wiki_speedrun/benchmark.py`; no moving `best.json` pointer is used.
+
+Decision systems use `matched_kev_tournament`, with the exact pinned Kev CPU
+encoder, preserved local tokenizer, 64-choice node cap, 1,024 state tokens,
+4,096 row tokens, 1,500-character excerpts, and 12 clicks. The encoder needs
+only the existing optional `tokenizers` and Kev packages; it loads no model
+weights, PyTorch, or CUDA. LLMs send the full ordered link list and complete
+history in one request, without any local tokenizer or tournament.
+DeepSeek uses `llm_full_list_json` with strict JSON schema. MiniMax currently
+lacks strict-schema support and is explicitly configured as
+`llm_full_list_json_object`: JSON-object mode with the same strict local
+validation. This is a declared change from the original plan. No automatic
+format downgrade or model fallback occurs. Invalid JSON or an illegal article
+ends the episode immediately and remains in the denominator.
+
+Each remote config bounds requests and reported cost; requests run serially.
+All three models use paid endpoints, so the shared free-model daily quota does
+not apply. Provider rate limits may still stop a run. At most two retries are
+allowed for 429 and selected 5xx responses, with at most 30 seconds of backoff
+per retry. Explicit provider 429/5xx errors
+inside HTTP-success responses use the same bounded retries; repeated provider
+failures also trigger the background worker's five-minute resume cycle. Choice
+distributions allow the API's two-decimal rounding across all returned options
+while retaining the original probabilities and selected choice. Ambiguous
+network timeouts are never retried automatically. The final request may overshoot the cost limit;
+missing charges are unknown, and request limits remain in effect. A full run
+can take hours. Saved costs include failed and abandoned attempts;
+probe costs are reported separately. Network latency and local GPU latency
+have different execution conditions.
+
+Individual commands retain global `--config` placement:
+
+```bash
+.venv/bin/python -m wiki_speedrun --config configs/jev.toml smoke-test --policy decision
+.venv/bin/python -m wiki_speedrun --config configs/jev.toml play Earth Moon --policy decision
+.venv/bin/python -m wiki_speedrun --config configs/llm.toml evaluate --policy llm --split dev --max-tasks 5
+.venv/bin/python -m wiki_speedrun --config configs/minimax.toml evaluate --policy llm --split test
+.venv/bin/python -m wiki_speedrun --config configs/jev.toml evaluate --policy jev --split dev
+```
+
+`--tasks` and `--split` are mutually exclusive. Remote evaluation defaults to
+the development split; `--max-tasks` always labels a subset. `--credentials-file`,
+`--model`, `--max-requests`, `--max-cost`, and `--resume RUN_DIRECTORY` are
+available for remote evaluation. A complete run has config/provenance,
+per-attempt requests, legal transitions, completed episodes, rejected LLM
+decisions, status, and metrics. Incomplete runs never enter paired comparisons.
+Standalone comparison is available through `compare-runs RUN_DIRECTORY ...
+--output runs/report.md`; different protocols require
+`--allow-system-protocols` explicitly.
+
+Run the offline regression suite in one line:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Time a plain BFS baseline on the same frozen evaluation pairs, offline:
+
+```bash
+.venv/bin/python scripts/benchmark_bfs.py --training-config configs/snap-full.toml --splits dev test --output runs/bfs-snap-full.json
+```
+
+For the original splits, replace `--training-config configs/snap-full.toml`
+with `--config configs/jev.toml`. Match the model evaluation's `--splits` and
+`--max-tasks` when comparing subsets; `--tasks FILE` accepts explicit custom
+pairs. JSON includes total `wall_seconds`, mean time per task, median/p95 query
+time, per-pair paths and timing, success within the configured click limit,
+and graph/task hashes. Existing output files are never overwritten.
+
+Each task runs a fresh directed BFS with no cached search results. Timing
+includes path reconstruction and per-task bookkeeping; loading, manifest
+validation, hashing and JSON output are excluded. Graph loading is timed
+separately. Compare total wall time with a model run's `wall_seconds` only for
+the same graph and complete task coverage. Summed API/inference latency is a
+different measure, particularly with concurrent remote episodes. BFS sees the
+entire graph, so this is an algorithm baseline with full graph access. The
+script makes no API calls and leaves evaluator source, settings, and saved
+runs unchanged, preserving existing remote resume identities.
+
+For navigation baselines with the same **12 actual moves** as the models, run
+each online search separately:
+
+```bash
+.venv/bin/python scripts/benchmark_bfs.py --algorithm bfs --max-steps 12 --training-config configs/snap-full.toml --splits dev test --output runs/bfs-12-snap-full.json
+.venv/bin/python scripts/benchmark_bfs.py --algorithm dfs --max-steps 12 --training-config configs/snap-full.toml --splits dev test --output runs/dfs-12-snap-full.json
+```
+
+These modes expose outgoing links only after visiting a page. Every directed
+edge traversal costs one move, including revisits and travel between branches;
+there is no teleport or browser-back action. A visible target link is always
+taken immediately. BFS prioritizes the oldest discovered frontier page; DFS
+prioritizes the newest branch, trying the first source link first. They travel
+to the first reachable frontier page along a shortest route using only links
+already revealed. Frontier pages that cannot currently be reached stay pending.
+An episode fails if no frontier can be reached or the move limit is exhausted.
+Neighbor order is deterministic and follows the dataset. These are online
+navigation adaptations of BFS/DFS, with no target-distance or text heuristics.
+
+Reports include success rate across all selected pairs, failure reasons, actual
+move traces and backtracking counts, total wall time, mean time per task, and
+median/p95 episode latency. `--max-steps` overrides only this offline script;
+otherwise it uses the selected config's click limit. Omitting `--algorithm`
+preserves the original full-graph BFS planner, also available as
+`--algorithm full-bfs`. All modes leave remote evaluation settings and resume
+identities unchanged.
+
+The real encoder parity tests use the preserved local tokenizer and installed
+optional dependencies; a minimal environment skips those checks. Existing
+HTTP tests require permission to bind localhost sockets. See
+[the implementation and pilot report](docs/jev-results.md) for measured
+results, protocol differences, limitations, and provenance.
+
+### Full-split background execution with a shared budget
+
+Run all 179 validation and 175 test pairs per model as a durable background job:
+
+```bash
+.venv/bin/python -m wiki_speedrun.batch --background
+```
+
+This runs MiniMax, DeepSeek, and Jev, in that order, along with the three pinned
+local checkpoints, and caps **combined reported spend at $9** across all splits, probes,
+retries, and interrupted episodes. The existing foreground `benchmark` command
+also now has the same default shared cap; change it explicitly with
+`--max-total-cost`. The final request may overshoot slightly. A response lacking
+cost stops the suite until charges can be reconciled. Previously reported
+charges are reconstructed from traces when the job restarts.
+
+The job writes `runs/openrouter-paid-full/job.json`, `budget.json`, and `worker.log`.
+It resumes temporary network/rate-limit failures after five minutes and daily
+quota failures after an hour. It stops on permanent API/configuration errors
+or budget limits. It does not retry model-authored invalid decisions: those
+remain completed benchmark failures. Repeat the background command after a
+machine restart to resume; invoking it while the worker is active does not
+start another worker. No task sampling is available in the background runner.
+
+The full report is written to `docs/jev-paid-full-results.md` only after all intended
+episodes pass coverage and artifact validation. Full raw results and per-split
+paired statistics are under `runs/openrouter-paid-full/`. The five-task report stays
+available as implementation history; it is not substituted for full evaluation.
+
+The paid lineup starts in new output directories because the earlier suite's
+model list and source identity are frozen for resume. Earlier Mammoth/Elephant
+artifacts remain in `runs/openrouter-full/`; its offline report script still
+rebuilds the historical report at `docs/jev-full-results.md`.

@@ -1,0 +1,10 @@
+# Explicit compatibility protocol: this model does not support strict JSON schema.
+# Every response is still validated locally, with immediate episode failure.
+model = "minimax/minimax-m3.1-flash"
+protocol = "llm_full_list_json_object"
+structured_output = "json_object"
+max_completion_tokens = 2048
+reasoning_effort = "low"
+temperature = 0
+max_requests = 100000
+max_cost = 100000

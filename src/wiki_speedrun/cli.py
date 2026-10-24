@@ -23,7 +23,9 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare-data", help="Download and prepare SNAP data")
     prepare.add_argument("--no-text", action="store_true", help="Download only the graph and paths")
-    commands.add_parser("smoke-test", help="Ask the running Kev server one simple question")
+    smoke = commands.add_parser("smoke-test", help="Ask a policy one simple question")
+    smoke.add_argument("--policy", choices=["kev", "jev", "decision", "llm"], default="kev")
+    smoke.add_argument("--credentials-file", type=Path)
     tasks = commands.add_parser("make-tasks", help="Save fixed reachable evaluation pairs")
     tasks.add_argument("--count", type=int, default=10)
     tasks.add_argument("--min-distance", type=int, default=2)
@@ -32,10 +34,41 @@ def parser() -> argparse.ArgumentParser:
     play = commands.add_parser("play", help="Navigate from a given article to a target")
     play.add_argument("start", help="Article title, with spaces or underscores")
     play.add_argument("target")
-    play.add_argument("--policy", choices=["kev", "random"], default="kev")
+    play.add_argument("--policy", choices=["kev", "random", "jev", "decision", "llm"], default="kev")
     evaluate = commands.add_parser("evaluate", help="Run a fixed set of tasks")
-    evaluate.add_argument("--tasks", type=Path, default=Path("data/splits/baseline.json"))
-    evaluate.add_argument("--policy", choices=["kev", "random"], default="kev")
+    task_selection = evaluate.add_mutually_exclusive_group()
+    task_selection.add_argument("--tasks", type=Path)
+    task_selection.add_argument("--split", choices=["dev", "test", "train"])
+    evaluate.add_argument("--max-tasks", type=int)
+    evaluate.add_argument("--resume", type=Path)
+    evaluate.add_argument("--policy", choices=["kev", "random", "jev", "decision", "llm"], default="kev")
+    for remote in (play, evaluate):
+        remote.add_argument("--credentials-file", type=Path)
+        remote.add_argument("--model")
+        remote.add_argument("--max-requests", type=int)
+        remote.add_argument("--max-cost", type=float)
+    benchmark = commands.add_parser("benchmark", help="Reproduce the remote/local comparison and report")
+    benchmark.add_argument("--output", type=Path, default=Path("runs/openrouter-paid-comparison"))
+    benchmark.add_argument("--max-tasks", type=int)
+    benchmark.add_argument("--max-total-cost", type=float, default=9.0,
+                           help="Shared reported-cost ceiling including probes and all runs (USD)")
+    benchmark.add_argument("--models", nargs="+", choices=["minimax", "deepseek", "jev"],
+                           default=["minimax", "deepseek", "jev"])
+    benchmark.add_argument("--splits", nargs="+", choices=["dev", "test"], default=["dev", "test"])
+    benchmark.add_argument("--include-local", action=argparse.BooleanOptionalAction, default=True)
+    benchmark.add_argument("--credentials-file", type=Path)
+    benchmark.add_argument("--remote-workers", type=int, default=3,
+                           help="Remote models evaluated concurrently; local models stay sequential")
+    benchmark.add_argument("--workers-per-model", type=int, default=1,
+                           help="Independent evaluation episodes in flight per remote model")
+    benchmark.add_argument("--training-config", type=Path,
+                           help="Training config selecting the frozen dataset and local evaluation settings")
+    benchmark.add_argument("--sft-checkpoint", type=Path,
+                           help="Override the SFT checkpoint in the local comparison")
+    compare = commands.add_parser("compare-runs", help="Validate and compare complete paired runs")
+    compare.add_argument("runs", nargs="+", type=Path)
+    compare.add_argument("--allow-system-protocols", action="store_true")
+    compare.add_argument("--output", type=Path, default=Path("runs/comparison.md"))
     training = {}
     for name, description in [
         ("prepare-training", "Validate human routes and build frozen training splits"),
@@ -84,8 +117,19 @@ def save_run(config, episodes, metrics, policy_name):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
-        if hasattr(args, "training_config"):
+        if args.command in ("prepare-training", "train-sft", "train-rl", "evaluate-trained"):
             return training_command(args)
+        if args.command == "benchmark":
+            from .benchmark import benchmark_command
+            return benchmark_command(args)
+        if args.command == "compare-runs":
+            from .comparison import write_comparison
+            write_comparison(args.runs, args.output, allow_system_protocols=args.allow_system_protocols)
+            return 0
+        if getattr(args, "policy", None) in ("jev", "decision", "llm"):
+            return remote_command(args)
+        if args.command == "evaluate" and (args.split or args.max_tasks or args.resume):
+            raise ValueError("Split, limit, and resume options require a remote policy; use evaluate-trained for local checkpoints")
         config = load_config(args.config)
         if args.command == "prepare-data":
             print(prepare_data(Path(config.data_dir), include_text=not args.no_text))
@@ -111,7 +155,7 @@ def main(argv=None) -> int:
         if args.command == "play":
             tasks = [Task(args.start.replace(" ", "_"), args.target.replace(" ", "_"))]
         else:
-            tasks = load_tasks(args.tasks)
+            tasks = load_tasks(args.tasks or Path("data/splits/baseline.json"))
         if not tasks:
             raise ValueError("The task file contains no tasks")
         if args.policy == "kev":
@@ -134,6 +178,42 @@ def main(argv=None) -> int:
     except (OSError, ValueError, RuntimeError, TypeError, ImportError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
+
+
+def remote_command(args):
+    from dataclasses import replace
+    from .remote_config import load_remote_config
+    from .remote import make_client, make_policy, run_remote, selected_tasks
+    from .remote_policy import LLMPolicy
+
+    config = load_remote_config(args.config)
+    changes = {key: str(getattr(args, key)) if key == "credentials_file" else getattr(args, key)
+               for key in ("credentials_file", "model", "max_requests", "max_cost")
+               if getattr(args, key, None) is not None}
+    config = replace(config, **changes)
+    if (args.policy == "llm") != config.protocol.startswith("llm_"):
+        raise ValueError("Policy and configured protocol disagree")
+    client = make_client(config)
+    if args.command == "smoke-test":
+        if args.policy == "llm":
+            answer = client.complete(LLMPolicy(client, config).request({
+                "current_article": "Earth", "target_article": "Moon", "remaining_clicks": 1,
+                "outgoing_articles": [{"id": "Moon", "title": "Moon"}, {"id": "Mars", "title": "Mars"}]}))
+            from .models.openrouter import strict_json
+            correct = answer['finish_reason'] == 'stop' and strict_json(answer['content']) == {"next_article": "Moon"}
+        else:
+            answer = client.smoke_test()
+            correct = answer['choice'] == 'earth'
+        print(json.dumps(client.redact(answer), indent=2))
+        return 0 if correct else 1
+    if args.command == "play":
+        tasks = [Task(args.start.replace(" ", "_"), args.target.replace(" ", "_"))]
+        selection = {"split": "play", "split_count": 1, "subset": True}
+    else:
+        tasks, selection = selected_tasks(config, args.split, args.tasks, args.max_tasks)
+    metrics = run_remote(config, tasks, selection, client=client, resume=getattr(args, 'resume', None))
+    print(json.dumps(metrics, indent=2))
+    return 0 if metrics['status'] == 'complete' else 1
 
 
 def training_command(args) -> int:

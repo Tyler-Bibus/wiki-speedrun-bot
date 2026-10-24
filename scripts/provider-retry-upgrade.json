@@ -1,0 +1,6 @@
+{
+  "file": "src/wiki_speedrun/models/openrouter.py",
+  "from_sha256": "fe1ad1d702b527fd4b1a5e336009d383b9751963682915dacfe24833fdf01193",
+  "to_sha256": "08bd5ab9e8619711e05aaf3aa3e827787cc70d7b4f32d14289b6414952a644ec",
+  "reason": "Retry chat finish_reason=error with no structured error details as provider_unavailable, using the existing bounded retry budget. Preserve explicit API status handling and every attempt receipt. Request payloads and inference settings are unchanged."
+}

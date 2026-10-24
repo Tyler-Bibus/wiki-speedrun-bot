@@ -8,4 +8,6 @@ __pycache__/
 /checkpoints/
 .pytest_cache/
 
-.env.openrouter
+/.env.openrouter
+/.env.openrouter.*
+!/.env.openrouter.example

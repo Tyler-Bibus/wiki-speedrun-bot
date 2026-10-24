@@ -85,83 +85,26 @@ def _evaluate(
     on_episode: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     import torch
+    from ..navigation import evaluate_policy
 
     underlying_model = getattr(model, "model", None)
     prior_mode = getattr(model, "training", getattr(underlying_model, "training", False))
-    episodes = []
+    policy = TournamentPolicy(model, config.choices, sample=False)
+
+    class LocalPolicy:
+        def choose(self, env):
+            with autocast_context(config):
+                return policy.choose(env)
+
     try:
         model.eval()
-        policy = TournamentPolicy(model, config.choices, sample=False)
         with torch.no_grad():
-            for index, task in enumerate(tasks):
-                if on_task_start is not None:
-                    on_task_start(task, index)
-                env = NavigationEnvironment(graph, task.start, task.target, config.rl.max_steps)
-                decisions = []
-                episode_id = f"eval-{index:06d}"
-                while not env.done:
-                    source = env.current
-                    history = list(env.history)
-                    with autocast_context(config):
-                        choice = policy.choose(env)
-                    env.step(choice["article"])
-                    reason = env.termination_reason
-                    nodes = choice.get("nodes", [])
-                    decisions.append({"latency_ms": choice.get("latency_ms", 0.0),
-                                      "nodes": len(nodes)})
-                    if on_transition is not None:
-                        on_transition({
-                            "schema_version": 1,
-                            "episode_id": episode_id,
-                            "pair": {"start": task.start, "target": task.target},
-                            "step": env.steps - 1,
-                            "source": source,
-                            "target": task.target,
-                            "history": history,
-                            "selected_link_id": choice["selected_link_id"],
-                            "selected_article": choice["article"],
-                            "next_article": env.current,
-                            "termination_reason": reason,
-                            "nodes": nodes,
-                            "model_calls": len(nodes),
-                            "latency_ms": float(choice.get("latency_ms", 0.0)),
-                        })
-                episode = {
-                    "schema_version": 1,
-                    "episode_id": episode_id,
-                    "pair": {"start": task.start, "target": task.target},
-                    "start": task.start,
-                    "target": task.target,
-                    "path": list(env.history),
-                    "steps": env.steps,
-                    "success": env.success,
-                    "termination_reason": env.termination_reason,
-                    "model_calls": sum(decision["nodes"] for decision in decisions),
-                    "decisions": decisions,
-                }
-                episodes.append(episode)
-                if on_episode is not None:
-                    on_episode(episode)
+            return evaluate_policy(LocalPolicy(), graph, tasks, config.rl.max_steps,
+                                   on_task_start=on_task_start, on_transition=on_transition,
+                                   on_episode=on_episode)
     finally:
         if prior_mode:
             model.train(True)
-    metrics = summarize(episodes, graph)
-    successes = [episode["steps"] for episode in episodes if episode["success"]]
-    metrics.update({
-        "schema_version": 1,
-        "failure_counts": {
-            reason: sum(episode["termination_reason"] == reason for episode in episodes)
-            for reason in ("step_limit", "dead_end")
-        },
-        "mean_success_steps": sum(successes) / len(successes) if successes else None,
-        "total_model_calls": sum(episode["model_calls"] for episode in episodes),
-        "mean_model_calls": (
-            sum(episode["model_calls"] for episode in episodes) / len(episodes)
-            if episodes else 0.0
-        ),
-        "episodes": episodes,
-    })
-    return metrics
 
 
 def evaluate_trained(config: Any, checkpoint: str | Path, split: str = "dev",

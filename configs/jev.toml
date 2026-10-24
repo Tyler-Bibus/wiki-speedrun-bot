@@ -1,0 +1,4 @@
+model = "typesafe/jev-1.14"
+protocol = "matched_kev_tournament"
+max_requests = 100000
+max_cost = 10000
