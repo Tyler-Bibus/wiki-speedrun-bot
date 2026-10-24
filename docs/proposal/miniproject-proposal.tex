@@ -1,0 +1,220 @@
+% Build with: make (in this directory), or make -C docs/proposal (from repo root).
+% Manual build: run pdflatex miniproject-proposal.tex twice to resolve citations.
+% Keep the completed proposal to 1--2 pages; submit the PDF on Canvas by Week 11.
+% The page break below separates sections (a)--(c) from sections (d)--(f).
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.25em}
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{0pt}
+  {1.5ex plus 0.3ex minus 0.2ex}{0.7ex plus 0.2ex}
+  {\normalfont\large\bfseries}}
+\renewcommand{\@maketitle}{\begin{center}
+  {\@title\par}\vskip 0.5em
+  {\normalsize\begin{tabular}[t]{c}\@author\end{tabular}\par}\vskip 0.3em
+  {\small\@date\par}
+\end{center}}
+\makeatother
+\renewcommand{\thesection}{\alph{section})}
+\newcommand{\placeholder}[1]{\textit{[#1]}}
+
+\title{\Large\textbf{Wi(ki) Need Speed: A Fine-tuned Decision Model for Wiki Speedrunning}\\[0.3em]
+  \large Mini-Project Proposal}
+% List EVERY group member below; add or remove names as needed.
+\author{Tyler Joseph Bibus}
+\date{CPRE 3250 \quad | \quad 10/24/2026}
+
+\begin{document}
+\maketitle
+\vspace{-1.5em}
+
+\section{Overview}
+
+\textbf{Purpose and approach.}
+Currently, while models train or gate-level tests are being run, students often turn to simple games to fill the time.
+One of these games is Wikipedia speedrunning, where you are given one particular article and a target article to navigate to using links alone~\cite{wikispeedia}.
+
+This provides an interesting machine learning challenge, and hence I propose \textbf{KevIN (Kev Intelligent Navigator)}.
+While one might expect basic algorithmic approaches like breadth-first search to work, when given a limit on the number of steps allowed, these approaches fall apart.
+This project will take the open-weight Kev decision model~\cite{kev} and fine-tune it for efficient Wikipedia speedrunning.
+We will compare this model with untuned Kev and selected large language models or decision models on the same navigation tasks. A trained MLP will serve as a fallback if adapting Kev proves impractical.
+
+The Stanford SNAP Wikispeedia dataset provides human navigation paths, article text, and a hyperlink graph~\cite{wikispeedia}. This dataset will be split into a training and validation set.
+The decision model we are training on this dataset will undergo a small amount of supervised learning before being passed through reinforcement learning.
+
+This model wouldn't be directly helpful, but could provide valuable insight into how models interpret related abstract ideas.
+
+\textbf{Novelty axis or axes.}
+Margiotta et al.~\cite{wikigame} evaluate LLM navigation on human WikiGame
+tasks. This project's application contribution is to adapt a small decision
+model to Wikispeedia and compare tuned and untuned models under a 12-click budget.
+The interesting aspect of Wikispeedia is that abstract concepts of relation may not be obvious, and, more interestingly, that articles that are not related to the target might be the best bridge!
+
+
+
+\textbf{Anticipated challenges.}
+The primary challenge will be fine-tuning the decision model.
+We plan to use Low-Rank Adaptation (LoRA)~\cite{lora}, which freezes the
+pre-trained base weights and learns low-rank updates to Transformer weight matrices.
+Typically, this is done on much larger models that would be completely impractical to tune locally.
+However, given the constraints of compute I have (one NVIDIA RTX 3090), we will still rely on this technology.
+The main challenge that remains with implementing LoRA for this is\ldots{} we never actually implemented something like this in class.
+The closest thing is transfer learning for CNNs.
+
+The Stanford dataset is actually relatively small, so being able to train across it will not be a concern.
+Despite the size of the dataset, preliminary tests with BFS capped at 12 moves (backtracking not counted) resulted in only about a 20\% success rate.
+
+\section{Project goals}
+
+\begin{enumerate}
+  \renewcommand{\labelenumi}{\textbf{G\arabic{enumi}.}}
+  \setlength{\itemsep}{0pt}
+  \setlength{\parsep}{0pt}
+  \item Build a LoRA tuning and legal-link navigation pipeline for
+    Wikispeedia; justify its extension of course modeling work.
+    \textbf{Rubric:} R1, R2.
+  \item Compare tuned and untuned Kev on held-out tasks within 12 clicks;
+    aim for over 90\% completion. Compare additional models as resources permit.
+    \textbf{Rubric:} R2, R3.
+  \item Produce route examples, comparison plots, a portable, documented notebook,
+    and a 10-minute pre-recorded video.
+    \textbf{Rubric:} R3, R4.
+\end{enumerate}
+
+\section{End-of-project mockup}
+
+The planned notebook will accept start/target articles and display the route,
+click count, and outcome within a 12-click budget. Hypothetical output:
+
+\begin{center}
+  \fbox{\parbox{0.90\linewidth}{\small\raggedright
+    \textbf{Hypothetical notebook demo output}\\[0.3em]
+    \textbf{Start:} Earth \hfill \textbf{Target:} Star\\[0.2em]
+    \textbf{Route:} Earth $\rightarrow$ Solar System $\rightarrow$ Sun
+      $\rightarrow$ Star\\[0.2em]
+    \textbf{Clicks:} 3 of 12 \hfill \textbf{Outcome:} Target reached
+  }}
+\end{center}
+
+\newpage
+
+\section{Timeline and team responsibilities}
+
+\begin{tabularx}{\linewidth}{@{}p{0.16\linewidth} X p{0.22\linewidth}@{}}
+  \hline
+  \textbf{When} & \textbf{Milestone / deliverable} & \textbf{Lead / support} \\
+  \hline
+  Week 10 & Download, initialize, explore dataset. & Tyler \\
+  Week 11 & Experiment, get baseline results with untrained Kev model. & Tyler \\
+  Week 12 & Initialize LoRA, set up SFT \& RL loops, start tuning. & Tyler \\
+  Week 13 & Compare KevIN, Jev 1.14, DeepSeek V4.1 1017 Flash, MiniMax 3.1 Flash. Write report \& prepare demo. & Tyler \\
+  \hline
+\end{tabularx}
+
+\textbf{Dependencies and fallback.}
+The main dependencies are the SNAP dataset~\cite{wikispeedia}, Kev~\cite{kev}, and implementing LoRA training~\cite{lora}.
+If the scope is for some reason too dramatic or there are issues tuning the model, I will settle for a specially tuned MLP.
+
+\section{Narrowed grading rubric}
+
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\linewidth}{@{}*{4}{>{\raggedright\arraybackslash}X}@{}}
+  \hline
+  \textbf{Exemplary} & \textbf{Accomplished} & \textbf{Beginning} & \textbf{No Evidence} \\
+  $(50,75]$ points & $(25,50]$ points & $(0,25]$ points & $[0]$ points \\
+  \hline
+  \multicolumn{4}{@{}l}{\textbf{R1: Conceptual Exploration}} \\
+  Explain how LoRA adaptation and supervised/RL training address link
+  selection; justify two design choices using representative routes and
+  observed model behavior.
+  & Explain state, legal actions, and the 12-click objective; justify navigation
+  as an application extension of course labs and distinguish the approach
+  from two related resources.
+  & Describe the navigation task, but leave its distinction from course labs
+  or the rationale for model adaptation unsupported.
+  & Identify no navigation-specific extension of course work or rationale
+  for the proposed approach. \\
+  \hline
+  \multicolumn{4}{@{}l}{\textbf{R2: Implementation / Programming}} \\
+  Package checkpoint loading and a short navigation demo. Compare saved SFT, SFT+RL, and one external baseline's results
+  on shared tasks; document setup and interpret differences.
+  & Run real-data preparation, LoRA training, checkpoint loading, and
+  tuned/untuned evaluation on held-out task pairs; enforce legal moves and
+  12 clicks, and save routes and outcomes.
+  & Produce some routes, but use toy data, allow illegal moves, mix training
+  and evaluation pairs, or leave training/checkpoint evaluation incomplete.
+  & Provide no runnable pipeline that produces meaningful navigation output
+  on the dataset. \\
+  \hline
+  \multicolumn{4}{@{}l}{\textbf{R3: Data Visualization / Analysis}} \\
+  Explain tuning gains and remaining limitations using comparison plots
+  and one success/failure route pair; relate model choices to useful
+  bridge pages, detours, or loops.
+  & Plot tuned/untuned completion rates and successful-route click counts;
+  report task counts and failures. Show one success and failure route when
+  present; define success as reaching the target within 12 clicks.
+  & Show only training curves and one overall score, without route examples,
+  click counts, or a clear completion definition.
+  & Provide no meaningful evaluation beyond a single number; include no
+  visualizations. \\
+  \hline
+  \multicolumn{4}{@{}l}{\textbf{R4: Documentation / Presentation (unchanged)}} \\
+  In addition to Accomplished, the team is selected by the instructor to
+  present live during the final exam slot (pretty please).
+  & A clear, well-organized 10-minute pre-recorded video and a
+  well-documented notebook, covering goals, approach, and results.
+  & A video and/or notebook is submitted but is unclear, disorganized,
+  or fails to adequately explain the project.
+  & No submitted video or documentation. \\
+  \hline
+\end{tabularx}
+\endgroup
+
+\section{Related work}
+
+\begingroup
+\small
+% Section (f) supplies the heading normally added by thebibliography.
+\renewcommand{\section}[2]{}
+\begin{thebibliography}{9}
+  \setlength{\itemsep}{2pt}
+  \setlength{\parskip}{0pt}
+
+  \bibitem{wikispeedia}
+  Stanford Network Analysis Project.
+  \href{https://snap.stanford.edu/data/wikispeedia.html}{\textit{Wikispeedia navigation paths}}.
+  This dataset provides human paths and article data; this project will use them to train
+  and evaluate an automated navigator.
+
+  \bibitem{kev}
+  J.\ Palmer.
+  \href{https://github.com/jaredpalmer/kev}{\textit{Kev}}.
+  This repository provides trainable decision models; this project will specialize Kev-0.8B
+  for sequential Wikipedia link selection.
+
+  \bibitem{wikigame}
+  D.\ Margiotta, D.\ Croce, and R.\ Basili.
+  \href{https://clic2025.unica.it/wp-content/uploads/2025/09/62_main_long.pdf}{\textit{Evaluating Large Language Models on Wikipedia Graph Navigation:
+  Insights from the WikiGame}}. CLiC-it, 2025.
+  Benchmarks LLM navigation; this project will study task-specific fine-tuning
+  of a compact decision model on Wikispeedia.
+
+  \bibitem{lora}
+  E.\ J.\ Hu et al.
+  \href{https://arxiv.org/abs/2106.09685}{\textit{LoRA: Low-Rank Adaptation of Large Language Models}}.
+  arXiv:2106.09685, 2021.
+  Introduces LoRA, our method for fine-tuning a large decision model.
+\end{thebibliography}
+\endgroup
+
+\end{document}
